@@ -10,6 +10,12 @@ const { sendLog } = require("../handlers/logHandler")
 const { sendChat } = require("../handlers/chatHandler")
 
 let mcClient = null
+let parserNoiseWarningShown = false
+
+function isKnownParserNoise(err) {
+    const message = err?.message || ""
+    return /Read error for undefined\s*:\s*Invalid tag:\s*\d+\s*>\s*20/i.test(message)
+}
 
 // Restore auth files from environment variables
 function restoreAuthFromEnv() {
@@ -73,7 +79,9 @@ async function startMinecraftBot(discordClient){
         }
     )
 
-    mcClient = bedrock.createClient({
+    parserNoiseWarningShown = false
+
+    const clientOptions = {
         host: config.server,
         port: config.port,
         username: config.username,
@@ -81,7 +89,13 @@ async function startMinecraftBot(discordClient){
         flow: "live",
         authTitle: "00000000441cc96b",
         skipPing: true
-    })
+    }
+
+    if (config.mcVersion) {
+        clientOptions.version = config.mcVersion
+    }
+
+    mcClient = bedrock.createClient(clientOptions)
 
     mcClient.on("spawn", () => {
 
@@ -146,10 +160,19 @@ async function startMinecraftBot(discordClient){
     })
 
     mcClient.on("error",(err)=>{
+        if (isKnownParserNoise(err)) {
+            if (!parserNoiseWarningShown) {
+                logger.warn("Ignoring known Bedrock parser noise (invalid NBT tag) to keep logs clean")
+                parserNoiseWarningShown = true
+            }
+            return
+        }
 
-        logger.error(err.message)
+        const errorMessage = err?.message || String(err)
 
-        sendLog(discordClient,`⚠️ Error: ${err.message}`)
+        logger.error(errorMessage)
+
+        sendLog(discordClient,`⚠️ Error: ${errorMessage}`)
 
     })
 

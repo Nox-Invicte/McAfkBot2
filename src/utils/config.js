@@ -5,6 +5,7 @@ module.exports = {
     server: process.env.MC_SERVER,
     port: Number(process.env.MC_PORT),
     username: process.env.MC_USERNAME,
+    mcVersion: process.env.MC_VERSION,
 
     logChannel: process.env.LOG_CHANNEL_ID,
     chatChannel: process.env.CHAT_CHANNEL_ID,
