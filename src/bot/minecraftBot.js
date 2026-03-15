@@ -1,5 +1,4 @@
 const bedrock = require("bedrock-protocol")
-const { Authflow } = require("prismarine-auth")
 const fs = require("fs")
 const path = require("path")
 
@@ -10,6 +9,7 @@ const { sendLog } = require("../handlers/logHandler")
 const { sendChat } = require("../handlers/chatHandler")
 
 let mcClient = null
+let attachedDiscordClient = null
 let parserNoiseWarningShown = false
 
 function isKnownParserNoise(err) {
@@ -61,23 +61,38 @@ function restoreAuthFromEnv() {
     }
 }
 
+function setDiscordClient(client) {
+    attachedDiscordClient = client || null
+}
+
+function sendOptionalLog(message) {
+    if (!attachedDiscordClient) return
+    sendLog(attachedDiscordClient, message)
+}
+
+function hasValidMinecraftConfig() {
+    return Boolean(config.server && config.port && config.username)
+}
+
 async function startMinecraftBot(discordClient){
 
-    if(mcClient) return
+    if (discordClient) {
+        setDiscordClient(discordClient)
+    }
+
+    if(mcClient) return true
+
+    if (!hasValidMinecraftConfig()) {
+        const message = "Minecraft bot login skipped: missing MC_SERVER, MC_PORT, or MC_USERNAME"
+        logger.warn(message)
+        sendOptionalLog(`⚠️ ${message}`)
+        return false
+    }
 
     logger.info("Starting Minecraft bot")
     
     // Restore auth from environment variables
     restoreAuthFromEnv()
-
-    const auth = new Authflow(
-        config.username,
-        "./auth",
-        { 
-            flow: "live",
-            authTitle: "00000000441cc96b"
-        }
-    )
 
     parserNoiseWarningShown = false
 
@@ -100,7 +115,7 @@ async function startMinecraftBot(discordClient){
     mcClient.on("spawn", () => {
 
         logger.info("Player spawned")
-        sendLog(discordClient,"✅ Spawned in Minecraft server")
+        sendOptionalLog("✅ Spawned in Minecraft server")
 
         setTimeout(()=>{
 
@@ -118,10 +133,10 @@ async function startMinecraftBot(discordClient){
                         message: config.joinCommand
                     })
 
-                    sendLog(discordClient,`⚡ Sent command: ${config.joinCommand}`)
+                    sendOptionalLog(`⚡ Sent command: ${config.joinCommand}`)
                 } catch(err) {
                     logger.error(`Error sending command: ${err.message}`)
-                    sendLog(discordClient,`❌ Failed to send command: ${err.message}`)
+                    sendOptionalLog(`❌ Failed to send command: ${err.message}`)
                 }
 
             } else {
@@ -145,15 +160,15 @@ async function startMinecraftBot(discordClient){
 
         logger.warn("Disconnected")
 
-        sendLog(discordClient,`❌ Disconnected: ${reason}`)
+        sendOptionalLog(`❌ Disconnected: ${reason}`)
 
         mcClient = null
 
         setTimeout(()=>{
 
-            sendLog(discordClient,"🔄 Reconnecting...")
+            sendOptionalLog("🔄 Reconnecting...")
 
-            startMinecraftBot(discordClient)
+            startMinecraftBot()
 
         },10000)
 
@@ -172,9 +187,11 @@ async function startMinecraftBot(discordClient){
 
         logger.error(errorMessage)
 
-        sendLog(discordClient,`⚠️ Error: ${errorMessage}`)
+        sendOptionalLog(`⚠️ Error: ${errorMessage}`)
 
     })
+
+    return true
 
 }
 
@@ -229,4 +246,4 @@ function sendMessage(message){
 
 }
 
-module.exports = { startMinecraftBot, stopMinecraftBot, getStatus, sendMessage }
+module.exports = { startMinecraftBot, stopMinecraftBot, getStatus, sendMessage, setDiscordClient }

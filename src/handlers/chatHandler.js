@@ -34,9 +34,10 @@ function sendChat(client, message){
         })
     } else {
         // Fallback to regular channel message
-        const channel = client.channels.cache.get(config.chatChannel)
+        if(!client || !config.chatChannel) return
+        const channel = client.channels?.cache?.get(config.chatChannel)
         if(channel){
-            channel.send(message)
+            channel.send(message).catch(() => {})
         }
     }
 
